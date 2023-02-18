@@ -2,16 +2,19 @@ package me.confusingfool.mobamputationrenewed;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.attributes.Attribute;
-import net.minecraft.entity.ai.attributes.AttributeModifier;
-import net.minecraft.entity.ai.attributes.Attributes;
-import net.minecraft.util.DamageSource;
-import net.minecraft.world.World;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.monster.ZombieEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.SwordItem;
+import net.minecraft.particles.ParticleTypes;
+import net.minecraft.util.Direction;
+import net.minecraft.util.Hand;
+import net.minecraft.util.math.*;
+import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.util.text.StringTextComponent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
-import net.minecraftforge.event.entity.living.LivingAttackEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.InterModComms;
 import net.minecraftforge.fml.common.Mod;
@@ -24,8 +27,8 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.UUID;
 import java.util.stream.Collectors;
+
 
 // The value here should match an entry in the META-INF/mods.toml file
 @Mod(MobAmputationRenewed.MOD_ID)
@@ -36,10 +39,6 @@ public class MobAmputationRenewed
     // Directly reference a log4j logger.
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private static final UUID LEFT_ARM_MODIFIER = UUID.fromString("12c7f62f-3414-4e1d-b229-9c34aeb76658");
-    private static final UUID RIGHT_ARM_MODIFIER = UUID.fromString("bdf7e42a-9e6a-45a1-85ed-136c6d5e9838");
-    private static final UUID LEFT_LEG_MODIFIER = UUID.fromString("3f79e48e-3e2d-474f-93c8-81a29e46c916");
-    private static final UUID RIGHT_LEG_MODIFIER = UUID.fromString("8872b2ea-19e0-44ea-a6e5-9ac44e706d55");
 
     public MobAmputationRenewed() {
         // Register the setup method for modloading
@@ -54,6 +53,7 @@ public class MobAmputationRenewed
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
     }
+
 
     private void setup(final FMLCommonSetupEvent event)
     {
@@ -82,36 +82,46 @@ public class MobAmputationRenewed
     }
 
     @SubscribeEvent
-    public void onLivingAttack(LivingAttackEvent event)
-    {
-        LivingEntity entity = event.getEntityLiving();
-        DamageSource source = event.getSource();
+    public void onAttackEntity(AttackEntityEvent event) {
+        PlayerEntity player = event.getPlayer();
+        Hand hand = event.getPlayer().swingingArm;
+        Entity target = event.getTarget();
 
-        if (entity.getType() == EntityType.ZOMBIE && !source.isBypassArmor())
-        {
-            if (Math.random() < 0.25)
-            {
-                String[] limbs = {"left_arm", "right_arm", "left_leg", "right_leg"};
-                int limb = (int) Math.floor(Math.random() * 4);
+        if (hand == null) {
+            return; // or log an error, or throw an exception, depending on your needs
+        }
 
-                Attribute armorAttribute = Attributes.ARMOR;
-                switch (limb)
-                {
-                    case 0:
-                        entity.getAttribute(armorAttribute).addPermanentModifier(new AttributeModifier(LEFT_ARM_MODIFIER, "Left Arm Modifier", 0, AttributeModifier.Operation.ADDITION));
-                        break;
-                    case 1:
-                        entity.getAttribute(armorAttribute).addPermanentModifier(new AttributeModifier(RIGHT_ARM_MODIFIER, "Right Arm Modifier", 0, AttributeModifier.Operation.ADDITION));
-                        break;
-                    case 2:
-                        entity.getAttribute(armorAttribute).addPermanentModifier(new AttributeModifier(LEFT_LEG_MODIFIER, "Left Leg Modifier", 0, AttributeModifier.Operation.ADDITION));
-                        break;
-                    case 3:
-                        entity.getAttribute(armorAttribute).addPermanentModifier(new AttributeModifier(RIGHT_LEG_MODIFIER, "Right Leg Modifier", 0, AttributeModifier.Operation.ADDITION));
+        if (target instanceof ZombieEntity && player.getItemInHand(hand).getItem() instanceof SwordItem) {
+            Vector3d playerPos = player.getPosition(1.0f);
+            Vector3d lookVec = player.getLookAngle();
+            Vector3d rayTraceEnd = playerPos.add(lookVec.scale(5.0));
+
+            RayTraceResult result = player.level.clip(new RayTraceContext(playerPos, rayTraceEnd, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, player));
+
+            if (result != null && result.getType() == RayTraceResult.Type.BLOCK) {
+                BlockPos pos = new BlockPos(playerPos.x, playerPos.y, playerPos.z);
+                AxisAlignedBB axisAlignedBB = new AxisAlignedBB(pos).inflate(1.0);
+                if (axisAlignedBB.contains(result.getLocation())) {
+                    if (((BlockRayTraceResult) result).getDirection().getAxis() == Direction.Axis.Y) {
+                        player.sendMessage(new StringTextComponent("Hit zombie on the head"), player.getUUID());
+                        for (int i = 0; i < 10; i++) {
+                            double motionX = (player.level.random.nextDouble() - 0.5) * 0.2;
+                            double motionY = -0.1;
+                            double motionZ = (player.level.random.nextDouble() - 0.5) * 0.2;
+                            player.level.addParticle(ParticleTypes.FLAME, target.getX(), target.getY() + 2, target.getZ(), motionX, motionY, motionZ);
+                        }
+                    } else if (((BlockRayTraceResult) result).getDirection() == Direction.WEST) {
+                        player.sendMessage(new StringTextComponent("Hit zombie on the left arm"), player.getUUID());
+                    } else if (((BlockRayTraceResult) result).getDirection() == Direction.EAST) {
+                        player.sendMessage(new StringTextComponent("Hit zombie on the right arm"), player.getUUID());
+                    }
                 }
             }
         }
     }
+
+
+
     // You can use SubscribeEvent and let the Event Bus discover methods to call
     @SubscribeEvent
     public void onServerStarting(FMLServerStartingEvent event) {

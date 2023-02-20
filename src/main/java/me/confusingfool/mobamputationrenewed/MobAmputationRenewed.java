@@ -1,17 +1,19 @@
 package me.confusingfool.mobamputationrenewed;
 
+import me.confusingfool.mobamputationrenewed.BloodParticle;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.monster.ZombieEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.SwordItem;
-import net.minecraft.particles.ParticleTypes;
 import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.*;
 import net.minecraft.util.math.vector.Vector3d;
 import net.minecraft.util.text.StringTextComponent;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
@@ -108,7 +110,6 @@ public class MobAmputationRenewed
                             double motionX = (player.level.random.nextDouble() - 0.5) * 0.2;
                             double motionY = -0.1;
                             double motionZ = (player.level.random.nextDouble() - 0.5) * 0.2;
-                            player.level.addParticle(ParticleTypes.FLAME, target.getX(), target.getY() + 2, target.getZ(), motionX, motionY, motionZ);
                         }
                     } else if (((BlockRayTraceResult) result).getDirection() == Direction.WEST) {
                         player.sendMessage(new StringTextComponent("Hit zombie on the left arm"), player.getUUID());
@@ -119,6 +120,7 @@ public class MobAmputationRenewed
             }
         }
     }
+
 
 
 
